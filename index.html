@@ -198,13 +198,12 @@
     createPlatform(0, 0, -42, 6, 2, 6, 0x3388ff);
     createPlatform(0, 2, -54, 10, 2, 10, 0xffaa00);
 
-    // --- 5. PLAYER & MODEL LOADING FIXES ---
-// --- 5. PLAYER & MODEL LOADING FIXES ---
+   // --- 5. PLAYER & MODEL LOADING FIXES ---
     const playerGroup = new THREE.Group();
     playerGroup.position.copy(spawnPoint);
     scene.add(playerGroup);
 
-    // Inner container for animations and scaling
+    // Inner container for scaling and animations
     const modelContainer = new THREE.Group();
     playerGroup.add(modelContainer);
 
@@ -219,7 +218,6 @@
     mtlLoader.load('ollie_gamer135.mtl', function (materials) {
       materials.preload();
 
-      // Ensure materials are fully opaque and visible on both sides
       for (const materialName in materials.materials) {
         const mat = materials.materials[materialName];
         mat.transparent = false;
@@ -234,15 +232,9 @@
       objLoader.load('ollie_gamer135.obj', function (obj) {
         playerGroup.remove(fallbackMesh);
 
-        // 1. Calculate overall bounding box of the OBJ
-        const box = new THREE.Box3().setFromObject(obj);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
-
-        // 2. Center geometry at exact origin (0, 0, 0) across all child meshes
+        // Enable shadows and opacity on all sub-meshes
         obj.traverse((child) => {
           if (child.isMesh) {
-            child.geometry.center(); // Bakes center directly into mesh vertices
             child.castShadow = true;
             child.receiveShadow = true;
             if (child.material) {
@@ -253,14 +245,22 @@
           }
         });
 
-        // 3. Reset OBJ position and raise so feet touch the ground (y = 0)
-        obj.position.set(0, size.y / 2, 0);
+        // 1. Calculate overall box boundaries
+        const box = new THREE.Box3().setFromObject(obj);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
 
-        // 4. Scale model to ~3 units tall
-        const scaleFactor = 3 / Math.max(size.y, 1);
+        // 2. Center X and Z, align bottom Y to 0 (feet on floor)
+        obj.position.x = -center.x;
+        obj.position.z = -center.z;
+        obj.position.y = -box.min.y;
+
+        // 3. Scale container uniformly to ~3 units tall
+        const targetHeight = 3;
+        const scaleFactor = targetHeight / (size.y || 1);
         modelContainer.scale.set(scaleFactor, scaleFactor, scaleFactor);
 
-        // Turn character 180 degrees to face forward
+        // Turn character around to face forward
         modelContainer.rotation.y = Math.PI;
 
         modelContainer.add(obj);
