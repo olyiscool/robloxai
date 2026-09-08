@@ -199,11 +199,12 @@
     createPlatform(0, 2, -54, 10, 2, 10, 0xffaa00);
 
     // --- 5. PLAYER & MODEL LOADING FIXES ---
+// --- 5. PLAYER & MODEL LOADING FIXES ---
     const playerGroup = new THREE.Group();
     playerGroup.position.copy(spawnPoint);
     scene.add(playerGroup);
 
-    // Inner mesh container for rotation and scaling
+    // Inner container for animations and scaling
     const modelContainer = new THREE.Group();
     playerGroup.add(modelContainer);
 
@@ -218,7 +219,7 @@
     mtlLoader.load('ollie_gamer135.mtl', function (materials) {
       materials.preload();
 
-      // FIX: Ensure materials are fully opaque and visible on both sides
+      // Ensure materials are fully opaque and visible on both sides
       for (const materialName in materials.materials) {
         const mat = materials.materials[materialName];
         mat.transparent = false;
@@ -233,24 +234,15 @@
       objLoader.load('ollie_gamer135.obj', function (obj) {
         playerGroup.remove(fallbackMesh);
 
-        // Center origin offset
+        // 1. Calculate overall bounding box of the OBJ
         const box = new THREE.Box3().setFromObject(obj);
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
 
-        obj.position.x = -center.x;
-        obj.position.z = -center.z;
-        obj.position.y = -box.min.y;
-
-        // Scale model to size
-        const scaleFactor = 3 / Math.max(size.y, 1);
-        modelContainer.scale.set(scaleFactor, scaleFactor, scaleFactor);
-
-        // FIX: Turn character 180 degrees if facing backwards
-        obj.rotation.y = Math.PI;
-
+        // 2. Center geometry at exact origin (0, 0, 0) across all child meshes
         obj.traverse((child) => {
           if (child.isMesh) {
+            child.geometry.center(); // Bakes center directly into mesh vertices
             child.castShadow = true;
             child.receiveShadow = true;
             if (child.material) {
@@ -261,11 +253,21 @@
           }
         });
 
+        // 3. Reset OBJ position and raise so feet touch the ground (y = 0)
+        obj.position.set(0, size.y / 2, 0);
+
+        // 4. Scale model to ~3 units tall
+        const scaleFactor = 3 / Math.max(size.y, 1);
+        modelContainer.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+        // Turn character 180 degrees to face forward
+        modelContainer.rotation.y = Math.PI;
+
         modelContainer.add(obj);
         playerLoaded = true;
       });
     });
-
+    
     // --- 6. RESPAWN & CONTROLS ---
     function respawn() {
       playerGroup.position.copy(spawnPoint);
