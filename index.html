@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>3D Roblox-Style Obby</title>
+  <title>3D Roblox-Style Obby with Sound</title>
   <style>
     body {
       margin: 0;
@@ -31,11 +31,28 @@
   <div id="ui">
     <div>Use WASD or Arrow Keys to Move</div>
     <div>Press SPACE to Jump</div>
-    <div id="status" style="margin-top: 10px; color: #ffcc00;">Loading Character...</div>
+    <div id="status" style="margin-top: 10px; color: #ffcc00;">Click screen to start audio...</div>
   </div>
 
   <script>
-    // --- 1. SCENE SETUP ---
+    // --- 1. AUDIO SETUP ---
+    const jumpSound = new Audio('jump.mp3');
+    const walkSound = new Audio('walk.mp3');
+    walkSound.loop = true;
+    
+    // Lower volume slightly so it isn't overpowering
+    jumpSound.volume = 0.5;
+    walkSound.volume = 0.4;
+
+    // Enable audio context on first click (browsers block auto-playing audio)
+    window.addEventListener('click', () => {
+      if (document.getElementById('status').innerText.includes('Click screen')) {
+        document.getElementById('status').innerText = 'Audio Ready!';
+        document.getElementById('status').style.color = '#00ff00';
+      }
+    }, { once: true });
+
+    // --- 2. SCENE SETUP ---
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x68b0d8);
     scene.fog = new THREE.FogExp2(0x68b0d8, 0.015);
@@ -56,7 +73,7 @@
     dirLight.shadow.mapSize.height = 2048;
     scene.add(dirLight);
 
-    // --- 2. GAME STATE & VARIABLES ---
+    // --- 3. GAME STATE & VARIABLES ---
     let playerLoaded = false;
     const velocity = new THREE.Vector3();
     const speed = 12;
@@ -67,14 +84,10 @@
     const keys = {};
     const platforms = [];
 
-    // --- 3. CREATE OBBY PLATFORMS ---
+    // --- 4. CREATE OBBY PLATFORMS ---
     function createPlatform(x, y, z, w, h, d, color = 0x3388ff, isKillBrick = false) {
       const geo = new THREE.BoxGeometry(w, h, d);
-      const mat = new THREE.MeshStandardMaterial({ 
-        color: color, 
-        roughness: 0.4,
-        metalness: 0.1
-      });
+      const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.1 });
       const platform = new THREE.Mesh(geo, mat);
       platform.position.set(x, y, z);
       platform.receiveShadow = true;
@@ -93,31 +106,27 @@
     createPlatform(0, 0, -42, 6, 2, 6, 0x3388ff);
     createPlatform(0, 2, -54, 10, 2, 10, 0xffaa00);
 
-   // --- 4. PLAYER & MTL/OBJ LOADING ---
+    // --- 5. PLAYER & MTL/OBJ LOADING ---
     const playerGroup = new THREE.Group();
     playerGroup.position.copy(spawnPoint);
     scene.add(playerGroup);
 
-    // Red fallback box while loading
     const fallbackGeo = new THREE.BoxGeometry(1.5, 3, 1.5);
     const fallbackMat = new THREE.MeshStandardMaterial({ color: 0xc80000 });
     const fallbackMesh = new THREE.Mesh(fallbackGeo, fallbackMat);
     fallbackMesh.position.y = 1.5;
     playerGroup.add(fallbackMesh);
 
-    // Load Materials (.mtl)
     const mtlLoader = new THREE.MTLLoader();
     mtlLoader.load('ollie_gamer135.mtl', function (materials) {
       materials.preload();
 
-      // Load Mesh (.obj) using the materials
       const objLoader = new THREE.OBJLoader();
       objLoader.setMaterials(materials);
-      
+
       objLoader.load('ollie_gamer135.obj', function (obj) {
         playerGroup.remove(fallbackMesh);
 
-        // Center mesh geometry around local origin to fix rotation/movement offset
         const box = new THREE.Box3().setFromObject(obj);
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
@@ -126,13 +135,11 @@
         obj.position.z = -center.z;
         obj.position.y = -box.min.y;
 
-        // Scale model height to standard player size (~3 units)
         const scaleFactor = 3 / Math.max(size.y, 1);
         const modelContainer = new THREE.Group();
         modelContainer.add(obj);
         modelContainer.scale.set(scaleFactor, scaleFactor, scaleFactor);
 
-        // Enable Shadows
         obj.traverse((child) => {
           if (child.isMesh) {
             child.castShadow = true;
@@ -142,33 +149,10 @@
 
         playerGroup.add(modelContainer);
         playerLoaded = true;
-        document.getElementById('status').innerText = 'Character Fully Loaded!';
-        document.getElementById('status').style.color = '#00ff00';
-      },
-      function (xhr) {
-        if (xhr.lengthComputable) {
-          const percent = Math.round((xhr.loaded / xhr.total) * 100);
-          document.getElementById('status').innerText = `Loading Mesh: ${percent}%`;
-        }
-      },
-      function (error) {
-        console.error('OBJ Error:', error);
-        document.getElementById('status').innerText = 'Error loading OBJ file';
-        document.getElementById('status').style.color = '#ff6666';
       });
-    },
-    function (xhr) {
-      if (xhr.lengthComputable) {
-        const percent = Math.round((xhr.loaded / xhr.total) * 100);
-        document.getElementById('status').innerText = `Loading Materials: ${percent}%`;
-      }
-    },
-    function (error) {
-      console.error('MTL Error:', error);
-      document.getElementById('status').innerText = 'Error loading MTL file';
-      document.getElementById('status').style.color = '#ff6666';
-      
-    });    // --- 5. CONTROLS ---
+    });
+
+    // --- 6. CONTROLS ---
     window.addEventListener('keydown', (e) => keys[e.code] = true);
     window.addEventListener('keyup', (e) => keys[e.code] = false);
     window.addEventListener('resize', () => {
@@ -180,9 +164,10 @@
     function respawn() {
       playerGroup.position.copy(spawnPoint);
       velocity.set(0, 0, 0);
+      walkSound.pause();
     }
 
-    // --- 6. GAME LOOP ---
+    // --- 7. GAME LOOP ---
     const clock = new THREE.Clock();
 
     function animate() {
@@ -195,7 +180,9 @@
       if (keys['KeyA'] || keys['ArrowLeft']) moveVector.x -= 1;
       if (keys['KeyD'] || keys['ArrowRight']) moveVector.x += 1;
 
-      if (moveVector.lengthSq() > 0) {
+      const isMoving = moveVector.lengthSq() > 0;
+
+      if (isMoving) {
         moveVector.normalize();
         const angle = Math.atan2(moveVector.x, moveVector.z);
         playerGroup.rotation.y = angle;
@@ -204,9 +191,14 @@
       velocity.x = moveVector.x * speed;
       velocity.z = moveVector.z * speed;
 
+      // Jump Execution & Sound
       if (keys['Space'] && canJump) {
         velocity.y = jumpStrength;
         canJump = false;
+        
+        // Play jump sound
+        jumpSound.currentTime = 0;
+        jumpSound.play().catch(() => {});
       }
 
       velocity.y -= gravity * delta;
@@ -218,6 +210,7 @@
       const playerRadius = 0.8;
       canJump = false;
 
+      // Collision Detection
       platforms.forEach((plat) => {
         const pPos = plat.position;
         const halfW = plat.userData.w / 2;
@@ -246,6 +239,17 @@
           }
         }
       });
+
+      // Walking Sound Trigger (only play when on ground and moving)
+      if (isMoving && canJump) {
+        if (walkSound.paused) {
+          walkSound.play().catch(() => {});
+        }
+      } else {
+        if (!walkSound.paused) {
+          walkSound.pause();
+        }
+      }
 
       if (playerGroup.position.y < -15) respawn();
 
