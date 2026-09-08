@@ -198,7 +198,7 @@
     createPlatform(0, 0, -42, 6, 2, 6, 0x3388ff);
     createPlatform(0, 2, -54, 10, 2, 10, 0xffaa00);
 
-   // --- 5. PLAYER & MODEL LOADING FIXES ---
+// --- 5. PLAYER & MODEL LOADING FIXES ---
     const playerGroup = new THREE.Group();
     playerGroup.position.copy(spawnPoint);
     scene.add(playerGroup);
@@ -215,58 +215,73 @@
     playerGroup.add(fallbackMesh);
 
     const mtlLoader = new THREE.MTLLoader();
-    mtlLoader.load('ollie_gamer135.mtl', function (materials) {
-      materials.preload();
+    mtlLoader.load(
+      'ollie_gamer135.mtl',
+      function (materials) {
+        materials.preload();
 
-      for (const materialName in materials.materials) {
-        const mat = materials.materials[materialName];
-        mat.transparent = false;
-        mat.opacity = 1.0;
-        mat.side = THREE.DoubleSide;
-        mat.depthWrite = true;
-      }
+        for (const materialName in materials.materials) {
+          const mat = materials.materials[materialName];
+          mat.transparent = false;
+          mat.opacity = 1.0;
+          mat.side = THREE.DoubleSide;
+          mat.depthWrite = true;
+        }
 
-      const objLoader = new THREE.OBJLoader();
-      objLoader.setMaterials(materials);
+        const objLoader = new THREE.OBJLoader();
+        objLoader.setMaterials(materials);
 
-      objLoader.load('ollie_gamer135.obj', function (obj) {
-        playerGroup.remove(fallbackMesh);
+        objLoader.load(
+          'ollie_gamer135.obj',
+          function (obj) {
+            // Hide and remove fallback box explicitly
+            fallbackMesh.visible = false;
+            playerGroup.remove(fallbackMesh);
 
-        // Enable shadows and opacity on all sub-meshes
-        obj.traverse((child) => {
-          if (child.isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-            if (child.material) {
-              child.material.transparent = false;
-              child.material.opacity = 1.0;
-              child.material.side = THREE.DoubleSide;
-            }
+            obj.traverse((child) => {
+              if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+                if (child.material) {
+                  child.material.transparent = false;
+                  child.material.opacity = 1.0;
+                  child.material.side = THREE.DoubleSide;
+                }
+              }
+            });
+
+            // Calculate overall box boundaries
+            const box = new THREE.Box3().setFromObject(obj);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+
+            // Center X and Z, align bottom Y to 0 (feet on floor)
+            obj.position.x = -center.x;
+            obj.position.z = -center.z;
+            obj.position.y = -box.min.y;
+
+            // Scale container uniformly to ~3 units tall
+            const targetHeight = 3;
+            const scaleFactor = targetHeight / (size.y || 1);
+            modelContainer.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+            // Turn character around to face forward
+            modelContainer.rotation.y = Math.PI;
+
+            modelContainer.add(obj);
+            playerLoaded = true;
+          },
+          undefined,
+          function (err) {
+            console.error('Failed to load .obj file:', err);
           }
-        });
-
-        // 1. Calculate overall box boundaries
-        const box = new THREE.Box3().setFromObject(obj);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
-
-        // 2. Center X and Z, align bottom Y to 0 (feet on floor)
-        obj.position.x = -center.x;
-        obj.position.z = -center.z;
-        obj.position.y = -box.min.y;
-
-        // 3. Scale container uniformly to ~3 units tall
-        const targetHeight = 3;
-        const scaleFactor = targetHeight / (size.y || 1);
-        modelContainer.scale.set(scaleFactor, scaleFactor, scaleFactor);
-
-        // Turn character around to face forward
-        modelContainer.rotation.y = Math.PI;
-
-        modelContainer.add(obj);
-        playerLoaded = true;
-      });
-    });
+        );
+      },
+      undefined,
+      function (err) {
+        console.error('Failed to load .mtl file:', err);
+      }
+    );
     
     // --- 6. RESPAWN & CONTROLS ---
     function respawn() {
